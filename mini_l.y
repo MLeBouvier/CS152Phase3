@@ -37,9 +37,11 @@
 %token ASSIGN 
 %token <dval> NUMBER
 %token <str> IDENTIFIER
+
 %type <str> ident
 %type <str> idents
-%type <str> declaration
+
+
 %left PLUS MINUS
 %left MULT DIV
 %nonassoc NOT
@@ -54,7 +56,8 @@ functions    :
               |   function functions 
               ;
 
-function      :  FUNCTION ident SEMICOLON BEGIN_PARAMS declarations END_PARAMS BEGIN_LOCALS declarations END_LOCALS
+function      :  FUNCTION  ident SEMICOLON {cout << "func " << variables.at(variables.size() - 1) << endl;}
+BEGIN_PARAMS declarationsParam END_PARAMS BEGIN_LOCALS declarations END_LOCALS
                   BEGIN_BODY statements END_BODY 
               ;
 
@@ -62,7 +65,16 @@ declarations :
               |   declaration SEMICOLON declarations
               ;
         
-declaration  :	idents COLON INTEGER {cout << "= " << variables.at(variables.size() - 1) << ", $0" << endl;}
+declaration  :	idents COLON INTEGER {cout << '.' << variables.at(variables.size() - 1) << endl;}
+              |   idents COLON ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER 
+		
+	      ;
+
+declarationsParam :  
+              |   declarationParam SEMICOLON declarationsParam
+              ;
+        
+declarationParam  :	idents COLON INTEGER {cout << '.' << variables.at(variables.size() - 1) << endl << "= " << variables.at(variables.size() - 1) << ", $0" << endl << ". __temp__" << tempCount - 2 << endl << "= __temp__" << tempCount - 2 << ", " << variables.at(variables.size() - 1) << endl;}
               |   idents COLON ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER 
 		
 	      ;
@@ -107,16 +119,16 @@ relation-exp  :  NOT relation-exp %prec NOT
               |  L_PAREN bool-exp R_PAREN 
               ;
 
-comp         :   EQ   {printf("=="), printf(" __temp__%d",tempCount), printf(", __temp__%d",tempCount - 2), printf(", __temp__%d\n",tempCount - 1);}
+comp         :   EQ   {printf("=="), printf(" __temp__%d",tempCount-1), printf(", __temp__%d",tempCount - 3), printf(", __temp__%d\n",tempCount - 2), cout << "?:= __label__" << (tempCount - 1) << ", __temp__" << tempCount-1 << endl;}
 
-              |  NEQ   {printf("!="), printf(" __temp__%d",tempCount), printf(", __temp__%d",tempCount - 2), printf(", __temp__%d\n",tempCount - 1);}
+              |  NEQ   {printf("!="), printf(" __temp__%d",tempCount-1), printf(", __temp__%d",tempCount - 3), printf(", __temp__%d\n",tempCount - 2), cout << "?:= __label__" << (tempCount - 3) << ", __temp__" << tempCount-1 << endl;}
 
-              |  LT   {printf("<"), printf(" __temp__%d",tempCount), printf(", __temp__%d",tempCount - 2), printf(", __temp__%d\n",tempCount - 1);}
+              |  LT   {printf("<"), printf(" __temp__%d",tempCount-1), printf(", __temp__%d",tempCount - 3), printf(", __temp__%d\n",tempCount - 2), cout << "?:= __label__" << (tempCount - 3) << ", __temp__" << tempCount-1 << endl;}
 
-              |  GT   {printf(">"), printf(" __temp__%d",tempCount), printf(", __temp__%d",tempCount - 2), printf(", __temp__%d\n",tempCount - 1);}
+              |  GT   {printf(">"), printf(" __temp__%d",tempCount-1), printf(", __temp__%d",tempCount - 3), printf(", __temp__%d\n",tempCount - 2), cout << "?:= __label__" << (tempCount - 3) << ", __temp__" << tempCount-1 << endl;}
 
-              |  LTE  {printf("<="), printf(" __temp__%d",tempCount), printf(", __temp__%d",tempCount - 2), printf(", __temp__%d\n",tempCount - 1);}
-              |  GTE  {printf(">="), printf(" __temp__%d",tempCount), printf(", __temp__%d",tempCount - 2), printf(", __temp__%d\n",tempCount - 1);}
+              |  LTE  {printf("<="), printf(" __temp__%d",tempCount-1), printf(", __temp__%d",tempCount - 3), printf(", __temp__%d\n",tempCount - 2), cout << "?:= __label__" << (tempCount - 3) << ", __temp__" << tempCount-1 << endl;}
+              |  GTE  {printf(">="), printf(" __temp__%d",tempCount-1), printf(", __temp__%d",tempCount - 3), printf(", __temp__%d\n",tempCount - 2), cout << "?:= __label__" << (tempCount - 3) << ", __temp__" << tempCount-1 << endl;}
               ;
              
 expressions   :  expression 
@@ -147,7 +159,7 @@ idents       :    ident
 		;
 
               
-ident        :    IDENTIFIER    {printf(".%s\n",$1), variables.push_back($1), printf(".__temp__%d\n",tempCount), tempCount = tempCount + 1;}
+ident        :    IDENTIFIER    {variables.push_back($1), tempCount = tempCount + 1;} /*tempcount is now the count for the next temp not the current one. check the output format for necessary error checks*/
               ;
 %%
 
