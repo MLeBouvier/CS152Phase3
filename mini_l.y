@@ -11,13 +11,16 @@
  extern int currLine;
  extern int currPos;
  int tempCount = 0;
+ int labelCount = 0;
  extern FILE * yyin;
  int yylex(void);
  vector <string> variables;
  vector <string> equations;
  void termOut();
  void compOut();
+ void branchOut();
  void incrementTemp();
+ void printVar();
  
  
 %}
@@ -64,7 +67,7 @@ functions    :
 
 function      :  FUNCTION  ident SEMICOLON {cout << "func " << variables.at(variables.size() - 1) << endl;}
 BEGIN_PARAMS declarationsParam END_PARAMS BEGIN_LOCALS declarations END_LOCALS
-                  BEGIN_BODY statements END_BODY 
+                  BEGIN_BODY statements END_BODY {cout << "endfunc\n\n";}
               ;
 
 declarations :  
@@ -80,7 +83,9 @@ declarationsParam :
               |   declarationParam SEMICOLON declarationsParam
               ;
         
-declarationParam  :	idents COLON INTEGER {++tempCount, cout << '.' << variables.at(variables.size()-1) << endl << "= " << variables.at(variables.size() - 1) << ", $0" << endl << ". __temp__" << tempCount - 1 << endl << "= __temp__" << tempCount - 1 << ", " << variables.at(variables.size() - 1) << endl;}
+declarationParam  :	idents COLON INTEGER 
+                {cout << '.' << variables.at(variables.size()-1) << endl << "= " 
+                << variables.at(variables.size() - 1) << ", $0" << endl; } 
               |   idents COLON ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER 
 		
 	      ;
@@ -91,14 +96,14 @@ statements   :
               ;
                        
 statement    :    var ASSIGN expression 
-              |   IF bool-exp THEN statement SEMICOLON statements ENDIF 
-              |   IF bool-exp THEN statement SEMICOLON statements ELSE statements ENDIF                
+              |   IF bool-exp {branchOut();} THEN statement SEMICOLON statements ENDIF { cout << ": __label__" << labelCount << endl;}
+              |   IF bool-exp {branchOut();} THEN statement SEMICOLON statements ELSE statements ENDIF                
               |   WHILE bool-exp BEGINLOOP statement SEMICOLON statements ENDLOOP                
               |   DO BEGINLOOP statement SEMICOLON statements ENDLOOP WHILE bool-exp                
               |   READ vars 
               |   WRITE vars 
               |   CONTINUE 
-              |   RETURN expression 
+              |   RETURN expression {cout << "ret __temp__" << tempCount-1 << endl;} //change?
 /* put this in the correct place in the code above {printf("= __temp__%d\n", tempCount - 1);} */
               ;
               
@@ -111,7 +116,7 @@ var          :    ident
               ;
 
 bool-exp      :   relation-and-exp 
-              |    bool-exp OR relation-and-exp  
+              |   bool-exp OR relation-and-exp  
               ;
 
 relation-and-exp :  relation-exp 
@@ -119,8 +124,7 @@ relation-and-exp :  relation-exp
                   ;
 
 relation-exp  :  NOT relation-exp %prec NOT 
-              |  expression comp expression {incrementTemp();}
-		{compOut();}
+              |  expression comp expression {compOut();}
               |  TRUE  
               |  FALSE  
               |  L_PAREN bool-exp R_PAREN 
@@ -155,7 +159,7 @@ mult-exp     :    term
 
 term         :    MINUS term %prec UMINUS {++tempCount, cout << "= __temp__ " << (tempCount - 1) << ",  " << $1 << endl;}
               |   NUMBER {termOut(), cout << $1 << endl;}
-              |   var 
+              |   var {printVar();}
               |   L_PAREN expression R_PAREN 
               |   ident L_PAREN expressions R_PAREN 
               |   ident L_PAREN R_PAREN 
@@ -183,14 +187,27 @@ void yyerror(const char *msg) {
 void termOut() {
 	cout << ". __temp__" << (tempCount) << endl;
 	cout << "= __temp__" << (tempCount) << ", ";
+  ++tempCount;
 }
 
 void compOut() {
-	cout << equations.at(equations.size() - 1) << " __temp__" << (tempCount);
+	cout << ". __temp__" << (tempCount) << endl;
+  cout << equations.at(equations.size() - 1) << " __temp__" << (tempCount);
 	cout << ", __temp__" << (tempCount-2) << ", __temp__" << (tempCount-1) << endl;
-	cout << "?:= __label__" << (tempCount-2) << ", __temp__" << (tempCount) << endl;
-	cout << ":= __label__" << (tempCount-1) << endl;
-	cout << ": __label__" << (tempCount-2) << endl;
+  tempCount++;
+}
+
+void branchOut() {
+  cout << "?:= __label__" << labelCount << ", __temp__" << (tempCount) << endl;
+  cout << ":= __label__" << labelCount+1 << endl;
+  cout << ": __label__" << labelCount << endl;
+  labelCount++;
+}
+
+void printVar() {
+  cout << ". __temp__" << tempCount << endl 
+  << "= __temp__" << tempCount << ", " << variables.at(variables.size() - 1) << endl;
+  ++tempCount;
 }
 	
 void incrementTemp() {
