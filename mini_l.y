@@ -147,8 +147,18 @@ expressions   :  expression
               ;        
               
 expression   :    mult-exp 
-              |   expression PLUS mult-exp 
-              |   expression MINUS mult-exp 
+              |   expression PLUS mult-exp {
+                    cout << ". __temp__" << tempCount << endl;
+                    cout << "+ __temp__" << tempCount << ", __temp__" << tempCount-2 << ", __temp__" << tempCount-1 << endl;
+                    cout << "param __temp__" << tempCount << endl;
+                    tempCount++;
+                  }
+              |   expression MINUS mult-exp {
+                    cout << ". __temp__" << tempCount << endl;
+                    cout << "- __temp__" << tempCount << ", __temp__" << tempCount-2 << ", __temp__" << tempCount-1 << endl;
+                    cout << "param __temp__" << tempCount << endl;
+                    tempCount++;
+                  }
               ;
               
 mult-exp     :    term 
@@ -161,7 +171,11 @@ term         :    MINUS term %prec UMINUS {++tempCount, cout << "= __temp__ " <<
               |   NUMBER {termOut(), cout << $1 << endl;}
               |   var {printVar();}
               |   L_PAREN expression R_PAREN 
-              |   ident L_PAREN expressions R_PAREN 
+              |   ident L_PAREN expressions R_PAREN {
+                    cout << ". __temp__" << tempCount << endl;
+                    cout << "call " << variables.at(variables.size() - 1) << ", __temp__" << tempCount << endl;
+                    tempCount++;
+                  } 
               |   ident L_PAREN R_PAREN 
               ;
               
