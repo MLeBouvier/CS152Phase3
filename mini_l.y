@@ -87,21 +87,25 @@ declarationParam  :	idents COLON INTEGER
                 {cout << '.' << variables.at(variables.size()-1) << endl << "= " 
                 << variables.at(variables.size() - 1) << ", $0" << endl; } 
               |   idents COLON ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER 
-		
 	      ;
-
                        
 statements   :   
               |  statement SEMICOLON statements 
               ;
                        
-statement    :    var ASSIGN expression 
+statement    :    var ASSIGN expression {
+                    cout << "= " << variables.at(variables.size()-1) << ", __temp__" << tempCount << endl;
+                  }
               |   IF bool-exp {branchOut();} THEN statement SEMICOLON statements ENDIF { cout << ": __label__" << labelCount << endl;}
               |   IF bool-exp {branchOut();} THEN statement SEMICOLON statements ELSE statements ENDIF                
               |   WHILE bool-exp BEGINLOOP statement SEMICOLON statements ENDLOOP                
               |   DO BEGINLOOP statement SEMICOLON statements ENDLOOP WHILE bool-exp                
-              |   READ vars 
-              |   WRITE vars 
+              |   READ vars {
+                    cout << ".< " << variables.at(variables.size()-1) << endl;
+                  }
+              |   WRITE vars {
+                    cout << ".> " << variables.at(variables.size()-1) << endl;
+                  }
               |   CONTINUE 
               |   RETURN expression {cout << "ret __temp__" << tempCount-1 << endl;} //change?
 /* put this in the correct place in the code above {printf("= __temp__%d\n", tempCount - 1);} */
@@ -130,16 +134,12 @@ relation-exp  :  NOT relation-exp %prec NOT
               |  L_PAREN bool-exp R_PAREN 
               ;
 
-comp         :   EQ  // {printf("=="), printf(" __temp__%d",tempCount-1), printf(", __temp__%d",tempCount - 3), printf(", __temp__%d\n",tempCount - 2), cout << "?:= __label__" << (tempCount - 1) << ", __temp__" << tempCount-1 << endl;}
-
-              |  NEQ   //{printf("!="), printf(" __temp__%d",tempCount-1), printf(", __temp__%d",tempCount - 3), printf(", __temp__%d\n",tempCount - 2), cout << "?:= __label__" << (tempCount - 3) << ", __temp__" << tempCount-1 << endl;}
-
-              |  LT   //{printf("<"), printf(" __temp__%d",tempCount-1), printf(", __temp__%d",tempCount - 3), printf(", __temp__%d\n",tempCount - 2), cout << "?:= __label__" << (tempCount - 3) << ", __temp__" << tempCount-1 << endl;}
-
-              |  GT   //{printf(">"), printf(" __temp__%d",tempCount-1), printf(", __temp__%d",tempCount - 3), printf(", __temp__%d\n",tempCount - 2), cout << "?:= __label__" << (tempCount - 3) << ", __temp__" << tempCount-1 << endl;}
-
-              |  LTE  {equations.push_back("<=");} //{printf("<="), printf(" __temp__%d",tempCount-1), printf(", __temp__%d",tempCount - 3), printf(", __temp__%d\n",tempCount - 2), cout << "?:= __label__" << (tempCount - 3) << ", __temp__" << tempCount-1 << endl;}
-              |  GTE  {equations.push_back(">=");} //{printf(">="), printf(" __temp__%d",tempCount-1), printf(", __temp__%d",tempCount - 3), printf(", __temp__%d\n",tempCount - 2), cout << "?:= __label__" << (tempCount - 3) << ", __temp__" << tempCount-1 << endl;}
+comp         :   EQ   {equations.push_back("==");} 
+              |  NEQ  {equations.push_back("!=");} 
+              |  LT   {equations.push_back("<");} 
+              |  GT   {equations.push_back(">");} 
+              |  LTE  {equations.push_back("<=");} 
+              |  GTE  {equations.push_back(">=");} 
               ;
              
 expressions   :  expression 
@@ -150,13 +150,11 @@ expression   :    mult-exp
               |   expression PLUS mult-exp {
                     cout << ". __temp__" << tempCount << endl;
                     cout << "+ __temp__" << tempCount << ", __temp__" << tempCount-2 << ", __temp__" << tempCount-1 << endl;
-                    cout << "param __temp__" << tempCount << endl;
                     tempCount++;
                   }
               |   expression MINUS mult-exp {
                     cout << ". __temp__" << tempCount << endl;
                     cout << "- __temp__" << tempCount << ", __temp__" << tempCount-2 << ", __temp__" << tempCount-1 << endl;
-                    cout << "param __temp__" << tempCount << endl;
                     tempCount++;
                   }
               ;
@@ -172,6 +170,7 @@ term         :    MINUS term %prec UMINUS {++tempCount, cout << "= __temp__ " <<
               |   var {printVar();}
               |   L_PAREN expression R_PAREN 
               |   ident L_PAREN expressions R_PAREN {
+                    cout << "param __temp__" << tempCount-1 << endl;
                     cout << ". __temp__" << tempCount << endl;
                     cout << "call " << variables.at(variables.size() - 1) << ", __temp__" << tempCount << endl;
                     tempCount++;
@@ -192,6 +191,9 @@ ident        :    IDENTIFIER    {variables.push_back($1);} /*tempcount is now th
 
 int main(int argc, char **argv) {
    yyparse();
+   for(int i = 0; i < variables.size(); i++){
+     cout << variables.at(i) << endl;
+   }
 }
 
 void yyerror(const char *msg) {
@@ -212,7 +214,7 @@ void compOut() {
 }
 
 void branchOut() {
-  cout << "?:= __label__" << labelCount << ", __temp__" << (tempCount) << endl;
+  cout << "?:= __label__" << labelCount << ", __temp__" << (tempCount-1) << endl;
   cout << ":= __label__" << labelCount+1 << endl;
   cout << ": __label__" << labelCount << endl;
   labelCount++;
