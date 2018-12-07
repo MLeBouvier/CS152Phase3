@@ -6,6 +6,7 @@
  #include <iostream>
  #include <vector> 
  #include <string>
+ 
  //#include <cstring>
  using namespace std;
  
@@ -30,6 +31,7 @@
  bool checkVector (string input, vector<string> checkVec);
  vector<string> newVariables;
  vector<string> arrays;
+ int arraySz (string input);
 
  vector<string> codeWords{"*", "/",  "+", "-",  "%",  "=",  "(",  ")", "end",  "program", "beginprogram",  "endprogram",  "elseif", "function", "beginparams", "endparams", "beginlocals", "endlocals", "beginbody", "endbody", "integer", "array", "[", "]", "[]", "of", "if", "then", "endif", "else", "while", "do", "foreach", "in", "beginloop", "endloop", "continue", "read", "write", "&&", "and", "or", "||", "true", "false", "return", "==", "!=", "<", ">", ">=", "<=", ";", ":", ","};
 
@@ -111,7 +113,12 @@ paramDecl    :	idents COLON INTEGER  {
 		  arrays.push_back(variables.back());
 
 		  }
-		  L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER 
+		  L_SQUARE_BRACKET NUMBER {
+		if (arraySz($1) <= 0) {
+			yyerror("Declaring an array of size <= 0");
+		}
+		
+		} R_SQUARE_BRACKET OF INTEGER 
 	      ;
 
 declarations :  
@@ -133,7 +140,7 @@ declaration  :	idents COLON INTEGER {
 			yyerror("Defining a variable more than once");
 		  }
                 }
-              |   idents COLON ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER 
+              |   idents COLON ARRAY L_SQUARE_BRACKET NUMBER {cout << variables.back() << endl;} R_SQUARE_BRACKET OF INTEGER 
 		          ;
                        
 statements   :   
@@ -332,7 +339,17 @@ bool checkVector(string input, vector<string> checkVec) {
 	return false;
 }
 
+int arraySz (string input) {
+	string ret;
+	for (int sz = 1; sz < input.size(); ++sz) {
+		if (input.at(input.size() - sz) == '[') {
+			ret = input.substr(input.size()-(sz-1), input.size()-1);
+			sz = stoi(ret);
+			return sz;
+		}
+	}
+	return 9999;
+}
 
 
-
-//errors completed 2, 3, 4, 5
+//errors completed 2, 3, 4, 5, 8
