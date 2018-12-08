@@ -6,6 +6,7 @@
  #include <iostream>
  #include <vector> 
  #include <string>
+ #include <sstream>
  using namespace std;
  
  void yyerror(const char *msg);
@@ -20,10 +21,12 @@
  vector <string> equations;
  vector <string> CallStack;
  vector <string> TempStack;
- vector <string> LabelStack;
+ vector <string> code;
+ vector <string> tempSave;
  
  void mathOp(string);
- void printBranch();
+ void allocSpace();
+ int lastSpaceOpen();
  
 %}
 
@@ -69,9 +72,16 @@ functions    :
               |   function functions 
               ;
 
-function      :  FUNCTION  ident SEMICOLON {cout << "func " << variables.back() << endl; variables.pop_back();}
-BEGIN_PARAMS paramDecls END_PARAMS BEGIN_LOCALS declarations END_LOCALS
-                  BEGIN_BODY statements END_BODY {cout << "endfunc\n\n";}
+function      :  FUNCTION  ident SEMICOLON {
+                   cout << "func " << variables.back() << endl; 
+                   variables.pop_back();
+                 } BEGIN_PARAMS paramDecls END_PARAMS BEGIN_LOCALS declarations END_LOCALS BEGIN_BODY statements END_BODY {
+                   for(int i = 0; i < code.size(); i++){
+                     cout << code.at(i) << endl;
+                   }
+                   code.clear();
+                   cout << "endfunc\n\n";
+                 }
               ;
 
 paramDecls   :  
@@ -83,12 +93,8 @@ paramDecl    :	idents COLON INTEGER  {
                   cout << "= " << variables.back() << ", $0" << endl; 
                   variables.pop_back();
                 } 
-              | idents COLON ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER {
-                  string s = $1;
-                  int l = s.find("[");
-                  int r = s.find("]");
-                  s = s.substr(l,r);
-                  cout << ".[] " << variables.back() << ", " << s << endl;
+              | idents COLON ARRAY L_SQUARE_BRACKET NUMBER[num] R_SQUARE_BRACKET OF INTEGER {
+                  cout << ".[] " << variables.back() << ", " << $num << endl;
                   variables.pop_back();
                 }  
 	      ;
@@ -103,12 +109,8 @@ declaration  :	idents COLON INTEGER {
                   }
                   variables.clear();
                 }
-              | idents COLON ARRAY L_SQUARE_BRACKET NUMBER R_SQUARE_BRACKET OF INTEGER {
-                  string s = $1;
-                  int l = s.find("[")+1;
-                  int r = s.find("]");
-                  s = s.substr(l,r-l);
-                  cout << ".[] " << variables.back() << ", " << s << endl;
+              | idents COLON ARRAY L_SQUARE_BRACKET NUMBER[num] R_SQUARE_BRACKET OF INTEGER {
+                  cout << ".[] " << variables.back() << ", " << $num << endl;
                   variables.pop_back();
                 }  
 		          ;
@@ -118,49 +120,55 @@ statements   :
               ;
                        
 statement    :    var ASSIGN expression {
-                    cout << "= " << variables.back() << ", " << TempStack.back() << endl;
-                    variables.pop_back();
-                    TempStack.pop_back();
+                    if(variables.back() == "[]"){ 
+                      variables.pop_back();
+                      string temp2 = TempStack.back();
+                      TempStack.pop_back();
+                      string temp1 = TempStack.back();
+                      TempStack.pop_back();
+                      
+                      code.push_back("[]= " + variables.back() + ", " + temp1 + ", " + temp2);
+                      variables.pop_back();
+                    }
+                    else {
+                      code.push_back("= " + variables.back() + ", " + TempStack.back());
+                      variables.pop_back();
+                      TempStack.pop_back();
+                    }
                   }
-              |   IF bool-exp {printBranch();} THEN statement SEMICOLON statements ENDIF { 
-                    cout << ": __label__" << labelCount << endl;
+              |   IF bool-exp {allocSpace();} THEN statement SEMICOLON statements ENDIF {
+                    code.push_back(": __label__" + to_string(labelCount+1));
+                  	code.at(lastSpaceOpen()) = ": __label__" + to_string(labelCount);
+                  	code.at(lastSpaceOpen()) = ":= __label__" + to_string(labelCount+1);
+                  	code.at(lastSpaceOpen()) = "?:= __label__" + to_string(labelCount) + ", " + tempSave.back();
+                  	labelCount+=2;
+                  	tempSave.pop_back();                    
                   }
-              |   IF bool-exp {printBranch();} THEN statement SEMICOLON statements ELSE statements ENDIF { 
-                    cout << ": __label__" << labelCount << endl;
+              |   IF bool-exp {allocSpace();} THEN statement SEMICOLON statements ELSE statements ENDIF { 
+              
                   }                
-              |   WHILE bool-exp BEGINLOOP statement SEMICOLON statements ENDLOOP{
-                    
-                    //  string label_3rd = "__label__" + to_string(labelCount+2);
-                    //  string label_2nd = "__label__" + to_string(labelCount+1);
-                    //  string label_1st = "__label__" + to_string(labelCount);
-                    //  labels.push_back(label_1st)
-                    //  labels.push_back(label_2nd)
-                    //  labels.push_back(label_3rd)
-                    // labelCount += 3
-                    
-                    //  code << ": " << labels.at(end) << endl; 
-                    //  code << code from bool-exp
-                    //  code << "?: " << labels.at(end-2) << ", " << TempStack.back() << endl;
-                    //  code << ":= " << labels.at(end-1) << endl;
-                    //  code << ": " <<  labels.at(end-2) << endl;
-                    //  code << code from statement 
-                    //  code << code from statements
-                    //  code << ":= " << labels.at(end) << endl;
-                    //  code << ": " << labels.at(end-2) << endl;   
-                    //  $$ = code         
+              |   WHILE {code.push_back("OPEN_SPACE");} bool-exp {allocSpace();} BEGINLOOP statement SEMICOLON statements ENDLOOP{
+                    code.push_back(":= __label__" + to_string(labelCount+2));
+                    code.push_back(": __label__" + to_string(labelCount+1));
+                  	code.at(lastSpaceOpen()) = ": __label__" + to_string(labelCount);
+                  	code.at(lastSpaceOpen()) = ":= __label__" + to_string(labelCount+1);
+                  	code.at(lastSpaceOpen()) = "?:= __label__" + to_string(labelCount) + ", " + tempSave.back();
+                    code.at(lastSpaceOpen()) = ": __label__" + to_string(labelCount+2);
+                  	labelCount+=3;
+                  	tempSave.pop_back();                                                
                   }
               |   DO BEGINLOOP statement SEMICOLON statements ENDLOOP WHILE bool-exp                
               |   READ vars {
-                    cout << ".< " << variables.back() << endl;
+                    code.push_back(".< " + variables.back());
                     variables.pop_back();
                   }
               |   WRITE vars {
-                    cout << ".> " << variables.back() << endl;
+                    code.push_back(".> " + variables.back());
                     variables.pop_back();
                   }
               |   CONTINUE 
               |   RETURN expression {
-                    cout << "ret " << TempStack.back() << endl;
+                    code.push_back("ret " + TempStack.back());
                     TempStack.pop_back();
                   } 
               ;
@@ -170,7 +178,9 @@ vars         :    var
               ;
       
 var          :    ident  
-              |   ident L_SQUARE_BRACKET expression R_SQUARE_BRACKET
+              |   ident L_SQUARE_BRACKET expression R_SQUARE_BRACKET {
+                    variables.push_back("[]");
+                  }
               ;
 
 bool-exp      :   relation-and-exp 
@@ -188,9 +198,11 @@ relation-exp  :  NOT relation-exp %prec NOT
                    TempStack.pop_back();
                   string src1 = TempStack.back();
                    TempStack.pop_back();
-                  
-                  cout << ". " << temp << endl;
-                  cout << equations.back() << temp << ", " << src1 << ", " << src2 << endl; 
+                   
+                  code.push_back(". " + temp);
+                  code.push_back(equations.back() + temp + ", " + src1 + ", " + src2);
+                  //cout << ". " << temp << endl;
+                  //cout << equations.back() << temp << ", " << src1 << ", " << src2 << endl; 
                   
                   equations.pop_back();
                   TempStack.push_back(temp);
@@ -227,29 +239,38 @@ mult-exp     :    term
 term         :    MINUS term %prec UMINUS //{++tempCount, cout << "= __temp__ " << (tempCount - 1) << ",  " << $1 << endl;}
               |   NUMBER {
                     string temp = "__temp__" + to_string(tempCount);
-                    cout << ". " << temp << endl;
-                    cout << "= " << temp << ", " << $1 << endl;
+                    ostringstream oss;
+                    oss << $1;
+                    code.push_back(". " + temp);
+                    code.push_back("= " + temp + ", " + oss.str());
                     TempStack.push_back(temp);
                     ++tempCount;
                   }
               |   var {
                     string temp = "__temp__" + to_string(tempCount);
-                    cout << ". " << temp << endl;
-                    cout << "= " << temp << ", " << variables.back() << endl;
+                    code.push_back(". " + temp);
+                    if(variables.back() == "[]"){
+                      variables.pop_back();
+                      code.push_back("=[] " + temp + ", " + variables.back() + ", " + TempStack.back());
+                      TempStack.pop_back();                      
+                    }
+                    else {
+                      code.push_back("= " + temp + ", " + variables.back());
+                    }
                     variables.pop_back();
                     TempStack.push_back(temp);
                     ++tempCount;
                   }
               |   L_PAREN expression R_PAREN 
               |   ident L_PAREN {CallStack.push_back($1);} expressions R_PAREN {
-                    cout << "param " << TempStack.back() << endl;
+                    code.push_back("param " + TempStack.back());
                     TempStack.pop_back();
                     string temp = "__temp__" + to_string(tempCount);
                     
-                    cout << ". " << temp << endl;
+                    code.push_back(". " + temp);
                     string s = CallStack.back();
                     s = s.substr(0,s.size()-2); //gets rid of L_PAREN
-                    cout << "call " << s << ", " << temp << endl;
+                    code.push_back("call " + s + ", " + temp);
                     
                     TempStack.push_back(temp);
                     CallStack.pop_back();
@@ -259,10 +280,10 @@ term         :    MINUS term %prec UMINUS //{++tempCount, cout << "= __temp__ " 
               |   ident L_PAREN {CallStack.push_back($1);} R_PAREN {
                     string temp = "__temp__" + to_string(tempCount);
                     
-                    cout << ". " << temp << endl;
+                    code.push_back(". " + temp);
                     string s = CallStack.back();
                     s = s.substr(0,s.size()-2);
-                    cout << "call " << s << ", __temp__" << tempCount << endl;
+                    code.push_back("call " + s + ", " + temp);
                     
                     TempStack.push_back(temp);
                     CallStack.pop_back();
@@ -276,7 +297,7 @@ idents       :    ident
 		          ;
 
               
-ident        :    IDENTIFIER    {variables.push_back($1);} /*tempcount is now the count for the next temp not the current one. check the output format for necessary error checks maybe need to update the tempCount in a bunch of other functions and not in this one?*/
+ident        :    IDENTIFIER    {variables.push_back($1);}
               ;
 %%
 
@@ -295,28 +316,26 @@ void mathOp(string op) {
   string src1 = TempStack.back();
     TempStack.pop_back();
   
-  
-  cout << ". " << temp << endl;
-  cout << op << temp << ", " << src1 << ", " << src2 << endl;
+  code.push_back(". " + temp);
+  code.push_back(op + temp + ", " + src1 + ", " + src2);
   
   TempStack.push_back(temp);
   tempCount++;
 }
 
-void initLoop() {
-  string label_3rd = "__label__" + to_string(labelCount+2);
-  string label_2nd = "__label__" + to_string(labelCount+1);
-  string label_1st = "__label__" + to_string(labelCount);
-  
-  cout << ": " << label_3rd << endl;
-  LabelStack.push_back(label_1st);
-  LabelStack.push_back(label_2nd);
-  LabelStack.push_back(label_3rd);
+void allocSpace() {
+  tempSave.push_back(TempStack.back());
+  TempStack.pop_back();
+  code.push_back("OPEN_SPACE");
+  code.push_back("OPEN_SPACE");
+  code.push_back("OPEN_SPACE"); 
 }
 
-void printBranch() {
-  cout << "?:= __label__" << labelCount << ", " << TempStack.back() << endl;
-  cout << ":= __label__" << labelCount+1 << endl;
-  cout << ": __label__" << labelCount << endl;
-  labelCount++;
+int lastSpaceOpen() {
+ for(int i = code.size()-1; i >= 0; i--){
+   if(code.at(i) == "OPEN_SPACE") {
+     return i;
+   }
+ }
+ return -1;
 }
