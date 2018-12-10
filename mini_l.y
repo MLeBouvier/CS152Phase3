@@ -18,6 +18,7 @@
  int tempCount = 0;
  int labelCount = 0;
  int continues = 0;
+
  vector <string> variables;
  vector <string> equations;
  vector <string> CallStack;
@@ -30,6 +31,15 @@
  int lastSpaceOpen();
  int lastContinue();
  
+ //stuff i added for error checking
+ vector<string> functions;
+ bool checkVector (string input, vector<string> checkVec);
+ vector<string> newVariables;
+ vector<string> arrays;
+ bool checkInLoop = false;
+
+ vector<string> codeWords{"*", "/",  "+", "-",  "%",  "=",  "(",  ")", "end",  "program", "beginprogram",  "endprogram",  "elseif", "function", "beginparams", "endparams", "beginlocals", "endlocals", "beginbody", "endbody", "integer", "array", "[", "]", "[]", "of", "if", "then", "endif", "else", "while", "do", "foreach", "in", "beginloop", "endloop", "continue", "read", "write", "&&", "and", "or", "||", "true", "false", "return", "==", "!=", "<", ">", ">=", "<=", ";", ":", ","};
+
 %}
 
 %union{
@@ -67,7 +77,11 @@
 
 
 %% 
-program       :   functions 
+program       :   functions {
+					if (checkVector("main", functions) != true) {
+						yyerror("no main function defined");
+					}
+				  }
               ;
         
 functions    :    
@@ -75,6 +89,7 @@ functions    :
               ;
 
 function      :  FUNCTION  ident SEMICOLON {
+				   functions.push_back(variables.back());
                    cout << "func " << variables.back() << endl; 
                    variables.pop_back();
                  } BEGIN_PARAMS paramDecls END_PARAMS BEGIN_LOCALS declarations END_LOCALS BEGIN_BODY statements END_BODY {
@@ -91,13 +106,29 @@ paramDecls   :
               ;
         
 paramDecl    :	idents COLON INTEGER  {
-                  cout << ". " << variables.back() << endl;
-                  cout << "= " << variables.back() << ", $0" << endl; 
-                  variables.pop_back();
-                } 
-              | idents COLON ARRAY L_SQUARE_BRACKET NUMBER[num] R_SQUARE_BRACKET OF INTEGER {
-                  cout << ".[] " << variables.back() << ", " << $num << endl;
-                  variables.pop_back();
+				  if (checkVector(variables.back(), newVariables) == false) {
+					if (checkVector(variables.back(), codeWords) == false) {
+								cout << ". " << variables.back() << endl;
+								cout << "= " << variables.back() << ", $0" << endl; 
+						newVariables.push_back(variables.back());
+								variables.pop_back();
+					}
+					else {
+						yyerror("Trying to name a variable with the same name as a reserved keyword");
+					}
+				  }
+				  else {
+					yyerror("Defining a variable more than once");
+				  }
+						} 
+					  | idents COLON ARRAY L_SQUARE_BRACKET NUMBER[num] R_SQUARE_BRACKET OF INTEGER {
+				  if ($num <= 0) {
+					yyerror("Declaring an array of size <= 0");
+				  }
+				  else {
+						  cout << ".[] " << variables.back() << ", " << $num << endl;
+						  variables.pop_back();
+				  }
                 }  
 	      ;
 
@@ -107,7 +138,17 @@ declarations :
         
 declaration  :	idents COLON INTEGER {
                   for( int i = 0; i < variables.size(); i++){
-                    cout << ". " << variables.at(i) << endl;
+					if (checkVector(variables.at(i), newVariables) == false) {
+						if (checkVector(variables.at(i), codeWords) == false) {
+										cout << ". " << variables.at(i) << endl;
+						}
+						else {
+							yyerror("Trying to name a variable with the same name as a reserved keyword");
+						}
+					}
+					 else {
+						yyerror("Defining a variable more than once");
+					}
                   }
                   variables.clear();
                 }
@@ -163,7 +204,7 @@ statement    :    var ASSIGN expression {
                     if(continues){
                       code.push_back(": __label__" + to_string(labelCount+3));
                       code.at(lastContinue()) = ":= __label__" + to_string(labelCount+3);
-                    }  
+                    } 
                     code.push_back(":= __label__" + to_string(labelCount+2));
                     code.push_back(": __label__" + to_string(labelCount+1));
                   	code.at(lastSpaceOpen()) = ": __label__" + to_string(labelCount);
@@ -306,32 +347,45 @@ term         :    MINUS term %prec UMINUS //{++tempCount, cout << "= __temp__ " 
                   }
               |   L_PAREN expression R_PAREN 
               |   ident L_PAREN {CallStack.push_back($1);} expressions R_PAREN {
-                    code.push_back("param " + TempStack.back());
-                    TempStack.pop_back();
-                    string temp = "__temp__" + to_string(tempCount);
-                    
-                    code.push_back(". " + temp);
-                    string s = CallStack.back();
-                    s = s.substr(0,s.size()-2); //gets rid of L_PAREN
-                    code.push_back("call " + s + ", " + temp);
-                    
-                    TempStack.push_back(temp);
-                    CallStack.pop_back();
-                    variables.pop_back();
-                    tempCount++;
-                  } 
-              |   ident L_PAREN {CallStack.push_back($1);} R_PAREN {
-                    string temp = "__temp__" + to_string(tempCount);
-                    
-                    code.push_back(". " + temp);
-                    string s = CallStack.back();
-                    s = s.substr(0,s.size()-2);
-                    code.push_back("call " + s + ", " + temp);
-                    
-                    TempStack.push_back(temp);
-                    CallStack.pop_back();
-                    variables.pop_back();
-                    tempCount++;
+					string s = CallStack.back();
+					s = s.substr(0,s.size()-2); //gets rid of L_PAREN
+					if (checkVector(s, functions) == true) {
+						code.push_back("param " + TempStack.back());
+						TempStack.pop_back();
+						string temp = "__temp__" + to_string(tempCount);
+						
+						code.push_back(". " + temp);
+					
+						code.push_back("call " + s + ", " + temp);
+					
+						TempStack.push_back(temp);
+						CallStack.pop_back();
+						variables.pop_back();
+						tempCount++;
+					}
+					 else {
+					yyerror("Calling a function which has not been defined");
+					}
+				} 
+			  |   ident L_PAREN {CallStack.push_back($1);} R_PAREN {
+					string s = CallStack.back();
+					s = s.substr(0,s.size()-2);
+					
+					if (checkVector(s, functions) == true) {
+						string temp = "__temp__" + to_string(tempCount);
+						
+						code.push_back(". " + temp);
+				
+						code.push_back("call " + s + ", " + temp);
+						
+						TempStack.push_back(temp);
+						CallStack.pop_back();
+						variables.pop_back();
+						tempCount++;
+					}
+					else {
+						yyerror("Calling a function which has not been defined");
+					}
                   }                    
               ;
               
@@ -393,3 +447,15 @@ int lastContinue() {
  }
  return -1;
 }
+
+//functions i added
+bool checkVector(string input, vector<string> checkVec) {
+	for (unsigned i = 0; i < checkVec.size(); ++i) {
+		if (checkVec.at(i) == input) {
+			return true;
+		}
+	}
+	return false;
+}
+//errors completed 2, 3, 4, 5, 8
+
